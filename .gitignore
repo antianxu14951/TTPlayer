@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+
+# Local working directories
+.cache/
+.tmp/
+.workbuddy/
+.pytest_cache/
+logs/
+runtime/
+
+# Build artifacts
+build/
+dist/
+
+# Local data
+*.db
+*.db-wal
+*.db-shm
+*.log
+*.tmp
+*.bak*
+
+# Scripts excluded per requirement
+*.bat
+
+# Music source scripts (third-party .js, excluded per requirement)
+sources/
+
+# OS / editor
+.DS_Store
