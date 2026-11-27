@@ -55,6 +55,11 @@ class Track:
     source: str = "local"
     source_url: str = ""
     added_at: str = field(default_factory=utc_now)
+    # 溯源字段（schema v4）：文件丢失时可凭原始地址重新获取。
+    # download_url —— 聚合搜索解析出的音频直链（search:* 来源填写）；
+    # origin_url  —— 来源页链接，抖音导入即分享视频页（douyin 来源填写）。
+    download_url: str = ""
+    origin_url: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -68,6 +73,8 @@ class Track:
             "source": self.source,
             "source_url": self.source_url,
             "added_at": self.added_at,
+            "download_url": self.download_url,
+            "origin_url": self.origin_url,
         }
 
     @classmethod
@@ -83,7 +90,27 @@ class Track:
             source=_safe_str(data.get("source", "local"), "local"),
             source_url=_safe_str(data.get("source_url", "")),
             added_at=_safe_str(data.get("added_at", utc_now()), utc_now()),
+            download_url=_safe_str(data.get("download_url", "")),
+            origin_url=_safe_str(data.get("origin_url", "")),
         )
+
+    # ---- 溯源 ------------------------------------------------------------
+
+    def trace_url(self) -> str:
+        """按来源返回最合适的溯源地址；都没有时退回旧的 source_url。"""
+        if self.source.startswith("search:"):
+            return self.download_url or self.origin_url or self.source_url
+        if self.source == "douyin":
+            return self.origin_url or self.source_url
+        return self.origin_url or self.download_url or self.source_url
+
+    def trace_kind(self) -> str:
+        """溯源地址的类型标签，供 UI 展示。"""
+        if self.source.startswith("search:"):
+            return "音频直链"
+        if self.source == "douyin":
+            return "抖音视频页"
+        return "来源地址"
 
 
 @dataclass

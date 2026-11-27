@@ -14,7 +14,7 @@ from typing import Any, Iterable
 
 from core.models import MusicSource, Playlist, Track
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _PLAYBACK_FIELDS = (
     "playlist_id",
@@ -37,16 +37,18 @@ _TABLE_DDL: dict[str, str] = {
     """,
     "tracks": """
         CREATE TABLE IF NOT EXISTS tracks (
-            id          TEXT PRIMARY KEY,
-            path        TEXT NOT NULL,
-            title       TEXT NOT NULL,
-            artist      TEXT NOT NULL DEFAULT '',
-            album       TEXT NOT NULL DEFAULT '',
-            duration_ms INTEGER NOT NULL DEFAULT 0,
-            cover_file  TEXT NOT NULL DEFAULT '',
-            source      TEXT NOT NULL DEFAULT 'local',
-            source_url  TEXT NOT NULL DEFAULT '',
-            added_at    TEXT NOT NULL DEFAULT ''
+            id           TEXT PRIMARY KEY,
+            path         TEXT NOT NULL,
+            title        TEXT NOT NULL,
+            artist       TEXT NOT NULL DEFAULT '',
+            album        TEXT NOT NULL DEFAULT '',
+            duration_ms  INTEGER NOT NULL DEFAULT 0,
+            cover_file   TEXT NOT NULL DEFAULT '',
+            source       TEXT NOT NULL DEFAULT 'local',
+            source_url   TEXT NOT NULL DEFAULT '',
+            added_at     TEXT NOT NULL DEFAULT '',
+            download_url TEXT NOT NULL DEFAULT '',
+            origin_url   TEXT NOT NULL DEFAULT ''
         )
     """,
     "playlists": """
@@ -110,6 +112,9 @@ _ADD_COLUMNS: dict[str, dict[str, str]] = {
         "source": "TEXT NOT NULL DEFAULT 'local'",
         "source_url": "TEXT NOT NULL DEFAULT ''",
         "added_at": "TEXT NOT NULL DEFAULT ''",
+        # v4 溯源字段：旧库启动时由 ensure_schema 自动补列，老数据保持空串。
+        "download_url": "TEXT NOT NULL DEFAULT ''",
+        "origin_url": "TEXT NOT NULL DEFAULT ''",
     },
     "playlists": {"created_at": "TEXT NOT NULL DEFAULT ''"},
     "playlist_tracks": {"position": "INTEGER NOT NULL DEFAULT 0"},
@@ -376,9 +381,10 @@ class Database:
             self._connection.execute("DELETE FROM tracks")
             self._connection.executemany(
                 "INSERT INTO tracks(id, path, title, artist, album, duration_ms, "
-                "cover_file, source, source_url, added_at) "
+                "cover_file, source, source_url, added_at, download_url, origin_url) "
                 "VALUES (:id, :path, :title, :artist, :album, :duration_ms, "
-                ":cover_file, :source, :source_url, :added_at)",
+                ":cover_file, :source, :source_url, :added_at, "
+                ":download_url, :origin_url)",
                 [track.to_dict() for track in track_list],
             )
             self._connection.executemany(

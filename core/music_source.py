@@ -424,6 +424,11 @@ def track_from_audio(hit: SearchHit, path: Path) -> Track:
         track.album = hit.album
     if hit.duration_ms:
         track.duration_ms = hit.duration_ms
+    # 溯源（schema v4）：记住解析出的音频直链。demo:// 是本地演示协议，
+    # 不是真实地址，不记。直链通常会过期，但这正是溯源的意义——文件
+    # 丢失后可凭来源（平台+曲目）重新搜索解析。
+    if hit.audio_url and not hit.audio_url.startswith("demo://"):
+        track.download_url = hit.audio_url
     return track
 
 

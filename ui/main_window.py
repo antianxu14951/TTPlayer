@@ -1260,6 +1260,9 @@ class MainWindow(QMainWindow):
             cover_bytes=result.cover_bytes,
             cover_extension=result.cover_extension,
         )
+        # 溯源（schema v4）：抖音来源记录分享视频页，文件丢失后可凭此
+        # 链接回溯原视频重新导入。
+        track.origin_url = result.page_url
         if not self.library.add_track(track):
             show_info(self, "重复导入", "该音频已存在于媒体库中")
             return
