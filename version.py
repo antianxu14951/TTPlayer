@@ -18,14 +18,14 @@ import re
 # Current version — semantic versioning (major.minor.patch)
 # ---------------------------------------------------------------------------
 MAJOR = 1
-MINOR = 0
+MINOR = 1
 PATCH = 0
 
 # Codename, echoing the default "暖白晨光" theme so build and UI share a voice.
 CODENAME = "晨光"
 
 # ISO 8601 release date.
-RELEASE_DATE = "2026-11-27"
+RELEASE_DATE = "2026-11-28"
 
 VERSION = f"{MAJOR}.{MINOR}.{PATCH}"
 VERSION_TUPLE = (MAJOR, MINOR, PATCH)
@@ -69,6 +69,18 @@ RELEASES: tuple[dict[str, object], ...] = (
         "version": VERSION,
         "codename": CODENAME,
         "date": RELEASE_DATE,
+        "notes": (
+            "曲目溯源：聚合搜索导入记录音频原始下载链接，抖音导入记录分享视频链接，"
+            "文件丢失后可凭来源重新获取",
+            "数据库自动升级：旧库打开时自动补齐新字段，原有数据不受影响",
+            "自动升级通道：程序启动时检查 GitHub Release，发现新版自动下载安装，"
+            "无需手动重新下载安装包",
+        ),
+    },
+    {
+        "version": "1.0.0",
+        "codename": CODENAME,
+        "date": "2026-11-27",
         "notes": (
             "四套可即时切换的主题（暖白晨光 / 墨蓝夜曲 / 奶油胶片 / 薄雾清晨）",
             "无按钮、无系统音效的绿色提醒浮层",
