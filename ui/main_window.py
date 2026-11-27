@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 import time
 from functools import partial
@@ -34,6 +35,7 @@ from PySide6.QtWidgets import (
 from config.settings import (
     COVER_DIR,
     current_db_file,
+    get_db,
     load_config,
     load_playback_state,
     save_config,
@@ -43,6 +45,7 @@ from core.douyin import DouyinImportResult
 from core.library import Library
 from core.metadata import build_track_from_file
 from core.models import Track
+from core.pet import PetBrain
 from core.player import MODE_LABELS, PlaybackMode, PlayerController
 from ui.background import SUPPORTED_FORMATS, BackgroundLayer
 from ui.branding import (
@@ -71,6 +74,7 @@ from ui.icons import (
     volume_pixmap,
 )
 from ui.queue_popup import QueuePopup
+from ui.pet_widget import PetWidget
 from ui.texts import ask_confirm, ask_danger, show_info, warning
 from ui.search_page import SearchPage, magnifier_pixmap
 from version import version_string
@@ -202,6 +206,8 @@ class MainWindow(QMainWindow):
         self._displayed_tracks: list[Track] = []
         self._slider_dragging = False
         self._restoring = False
+        # 桌面宠物挂件：由 _setup_pet() 按设置创建，关闭时统一保存状态。
+        self._pet_widget: PetWidget | None = None
         # Qt.Popup closes itself when the user presses anywhere outside it,
         # including the key that opened it; this marks when that happened.
         self._queue_popup_closed_at = 0.0
@@ -685,6 +691,59 @@ class MainWindow(QMainWindow):
         self._on_mode_changed(self.player.mode)
         self._refresh_device_button()
         self._restore_listening_session()
+        self._setup_pet()
+
+    # ---------- Desktop pet ----------
+
+    def _setup_pet(self) -> None:
+        """按设置创建/销毁桌面宠物挂件；重复调用安全（以最新设置为准）。"""
+        config = load_config()
+        breed = str(config.get("pet_breed", "") or "orange")
+        if not bool(config.get("pet_enabled", False)):
+            self._teardown_pet()
+            return
+        if self._pet_widget is not None:
+            if self._pet_widget.breed == breed:
+                return  # 已在运行且品种未变
+            self._teardown_pet()
+        brain = PetBrain()
+        saved = self._load_pet_state()
+        brain.apply_saved(saved)
+        widget = PetWidget(brain)
+        widget.breed = breed
+        widget.bind_persistence(self._save_pet_state)
+        widget.start()
+        self._pet_widget = widget
+
+    def _teardown_pet(self) -> None:
+        widget = self._pet_widget
+        if widget is None:
+            return
+        self._save_pet_state()
+        widget.stop()
+        widget.deleteLater()
+        self._pet_widget = None
+
+    def _save_pet_state(self) -> None:
+        widget = self._pet_widget
+        if widget is None:
+            return
+        try:
+            get_db().set_setting(
+                "pet.state", json.dumps(widget.brain.export(), ensure_ascii=False)
+            )
+        except Exception:  # noqa: BLE001 - 宠物存档失败不影响播放器
+            pass
+
+    def _load_pet_state(self) -> dict[str, Any]:
+        try:
+            raw = get_db().get_setting("pet.state", "")
+            if isinstance(raw, str) and raw.strip():
+                data = json.loads(raw)
+                return data if isinstance(data, dict) else {}
+        except Exception:  # noqa: BLE001 - 坏档直接当新宠物养
+            pass
+        return {}
 
     # ---------- Audio device ----------
 
@@ -889,6 +948,11 @@ class MainWindow(QMainWindow):
             self.volume_slider.setValue(int(volume * 100))
         self.player.set_volume(volume)
         self._apply_background_from_config(config)
+        # 桌面宠物：开关/形象变化时按最新配置重建或销毁挂件。
+        try:
+            self._setup_pet()
+        except Exception:  # noqa: BLE001 - 挂件失败不影响设置保存
+            pass
         show_info(
             self,
             "设置已保存",
@@ -1597,6 +1661,11 @@ class MainWindow(QMainWindow):
         try:
             self._persist_session()
         except Exception:  # noqa: BLE001 - a locked library must not block exit
+            pass
+        # 桌面宠物：退出前保存存档（_teardown_pet 内部会先 save 再销毁）。
+        try:
+            self._teardown_pet()
+        except Exception:  # noqa: BLE001 - never block closing
             pass
         # release_source, not stop: stopping leaves the file loaded and Windows
         # keeps a handle on it, which blocks deletes and temp cleanup.

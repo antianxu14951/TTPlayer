@@ -70,6 +70,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "playback_mode": "list_loop",
     "theme": "daylight",
     "background_image": "",
+    # 桌面宠物挂件：enabled 控制开关，breed 为品种 id（core.pet.BREEDS）。
+    "pet_enabled": False,
+    "pet_breed": "orange",
 }
 
 _db: Any = None

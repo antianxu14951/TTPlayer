@@ -16,6 +16,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QFontMetrics, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -629,6 +630,31 @@ class SettingsDialog(QDialog):
         appearance_form.addRow(QLabel(""), self.bg_info)
         self.bg_edit.editingFinished.connect(self._refresh_bg_info)
         # 背景透明度统一固定为 20%，不再提供用户自定义选项。
+
+        # ---------- 桌面宠物 ----------
+        self.pet_switch = QCheckBox("在桌面显示宠物挂件")
+        self.pet_switch.setToolTip(
+            "开启后桌面上会出现一只 Q 版猫/狗：饿了会气泡提醒，需要你投喂；\n"
+            "听歌时长可以赚猫粮和水（每天最多 3 小时的口粮）。\n"
+            "左键点它=摸摸头（睡着时点=把它叫醒，会生气哦），拖动可挪位置，右键投喂。"
+        )
+        appearance_form.addRow(self._label("桌面宠物"), self.pet_switch)
+
+        self.pet_breed_combo = QComboBox()
+        from core.pet import BREEDS
+
+        for breed_id, info in BREEDS.items():
+            self.pet_breed_combo.addItem(info["label"], breed_id)
+        self.pet_breed_combo.setToolTip("选择桌面宠物的品种外观；动作表情全品种一致")
+        appearance_form.addRow(self._label("宠物品种"), self.pet_breed_combo)
+        self.pet_switch.toggled.connect(self._on_pet_enabled_toggled)
+        self.pet_hint = QLabel(
+            "单击摸头；睡梦中单击会把它硬叫醒（后果自负）；右键投喂/加水。"
+        )
+        self.pet_hint.setObjectName("settingsHint")
+        self.pet_hint.setWordWrap(True)
+        appearance_form.addRow(QLabel(""), self.pet_hint)
+
         content_layout.addWidget(appearance_card)
 
         # ---------- storage ----------
@@ -810,9 +836,18 @@ class SettingsDialog(QDialog):
         self.quality_combo.setCurrentIndex(max(0, index))
         self.search_timeout_spin.setValue(int(config.get("search_timeout_seconds", 15)))
         self.search_limit_spin.setValue(int(config.get("search_limit_per_source", 30)))
+        self.pet_switch.setChecked(bool(config.get("pet_enabled", False)))
+        breed = str(config.get("pet_breed", "") or "")
+        index = self.pet_breed_combo.findData(breed)
+        self.pet_breed_combo.setCurrentIndex(max(0, index))
+        self._on_pet_enabled_toggled(self.pet_switch.isChecked())
         self._refresh_bg_info()
         self._refresh_cache_info()
         self._refresh_db_info()
+
+    def _on_pet_enabled_toggled(self, checked: bool) -> None:
+        """宠物开关联动：关闭时置灰品种选择，避免改了也不生效的错觉。"""
+        self.pet_breed_combo.setEnabled(checked)
 
     def _refresh_bg_info(self) -> None:
         from ui.background import is_video
@@ -984,6 +1019,12 @@ class SettingsDialog(QDialog):
                 "douyin_quality": self.quality_combo.currentText(),
                 "search_timeout_seconds": self.search_timeout_spin.value(),
                 "search_limit_per_source": self.search_limit_spin.value(),
+                "pet_enabled": self.pet_switch.isChecked(),
+                "pet_breed": (
+                    self.pet_breed_combo.currentData()
+                    or self.pet_breed_combo.itemData(0)
+                    or "orange"
+                ),
             }
         )
         save_config(updates)
