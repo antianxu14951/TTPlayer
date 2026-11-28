@@ -19,6 +19,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
     QMenu,
@@ -33,6 +34,7 @@ from config.settings import COVER_DIR
 from core.models import Track
 from ui.formatting import format_duration
 from ui.icons import note_pixmap
+from ui.marquee import MarqueeLabel
 from ui.theme import theme_color
 
 COLUMNS = ("#", "标题", "歌手", "专辑", "时长")
@@ -111,6 +113,21 @@ class QueueView(QWidget):
         layout.addStretch(1)
         return page
 
+    def _tail_widths(self) -> list[tuple[int, int]]:
+        """歌手 / 专辑 / 时长的固定宽度。
+
+        弹层内容宽只有 412px（WIDTH 440 减两侧 14px），再扣掉 # 列的
+        44px 和表格自身的纵向滚动条，标题实际能拿到多少要看实测。
+
+        取舍：歌手是「谁唱的」，一眼要认得出，给 4 字；专辑是补充
+        信息，扫一眼知道是哪张就够，给 4 字略窄；时长是固定 mm:ss。
+        这三列都不许超宽截断成「周杰…」那种认不出人的样子，但也不
+        值得为长专辑名牺牲标题——所以宁可让它们各自用省略号收尾，
+        把余量基本全部让给标题。标题越宽、真正需要跑马灯的歌越少，
+        这正是目的：跑马灯只该发生在确实放不下的地方。
+        """
+        return [(2, 72), (3, 84), (4, 44)]
+
     def _build_table(self) -> QTableWidget:
         table = QTableWidget()
         # Same object name on purpose: the QSS for the library table already
@@ -132,7 +149,11 @@ class QueueView(QWidget):
         table.setColumnWidth(0, self._number_width)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         for column in range(2, len(COLUMNS)):
-            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
+        # 标题是这列的主语：歌手/专辑只是补充，给固定宽度，
+        # 剩下的全部让给标题。否则长歌手名会把标题挤成省略号。
+        for column, width in self._tail_widths():
+            table.setColumnWidth(column, width)
         table.doubleClicked.connect(self._on_double_click)
         table.customContextMenuRequested.connect(self._show_menu)
         self.table = table
@@ -173,20 +194,14 @@ class QueueView(QWidget):
             number.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(row, 0, number)
 
-            title = QTableWidgetItem(track.title)
-            title.setData(Qt.ItemDataRole.UserRole, track.id)
-            if track.cover_file:
-                pixmap = QPixmap(str(COVER_DIR / track.cover_file))
-                if not pixmap.isNull():
-                    title.setIcon(
-                        pixmap.scaled(
-                            34,
-                            34,
-                            Qt.AspectRatioMode.KeepAspectRatio,
-                            Qt.TransformationMode.SmoothTransformation,
-                        )
-                    )
-            self.table.setItem(row, 1, title)
+            title_item = QTableWidgetItem("")
+            title_item.setData(Qt.ItemDataRole.UserRole, track.id)
+            self.table.setItem(row, 1, title_item)
+            self.table.setCellWidget(
+                row,
+                1,
+                self._make_title_cell(track, bool(current_id) and track.id == current_id),
+            )
 
             self.table.setItem(row, 2, QTableWidgetItem(track.artist))
             self.table.setItem(row, 3, QTableWidgetItem(track.album))
@@ -196,6 +211,49 @@ class QueueView(QWidget):
 
         self.table.verticalScrollBar().setValue(scroll)
 
+    def _make_title_cell(self, track: Track, current: bool) -> QWidget:
+        """标题列：封面缩略图 + 跑马灯文字。
+
+        标题是这里唯一会超长的字段（歌手/专辑都是短词），所以只给
+        标题用 MarqueeLabel。当前行加 "▸ " 前缀，但前缀不参与滚动
+        判定——它占的宽度事先扣掉，否则一个刚放得下的名字会因为多了
+        两个字符就开始晃。
+        """
+        cell = QWidget()
+        cell.setObjectName("queueTitleCell")
+        # 让表格自己的行底色（含当前行 TINT）透上来：
+        # cell widget 会盖住 item 的背景，不透明的话当前行高亮会在
+        # 标题这一列断掉，看起来像选中了半行。
+        cell.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        cell.setAutoFillBackground(False)
+        lay = QHBoxLayout(cell)
+        lay.setContentsMargins(2, 0, 2, 0)
+        lay.setSpacing(6)
+
+        prefix = "▸  " if current else "   "
+        if track.cover_file:
+            pixmap = QPixmap(str(COVER_DIR / track.cover_file))
+            if not pixmap.isNull():
+                thumb = QLabel()
+                thumb.setFixedSize(28, 28)
+                thumb.setPixmap(
+                    pixmap.scaled(
+                        28,
+                        28,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+                lay.addWidget(thumb)
+
+        label = MarqueeLabel(prefix + track.title)
+        label.setObjectName("queueTitleText")
+        label.setProperty("currentTrack", current)
+        label.setToolTip(track.title)
+        lay.addWidget(label, stretch=1)
+        cell.setProperty("trackId", track.id)
+        return cell
+
     def _style_row(self, row: int, track: Track, current: bool) -> None:
         """Paint one row as current or ordinary, without touching its data."""
         number = self.table.item(row, 0)
@@ -203,11 +261,14 @@ class QueueView(QWidget):
             number.setForeground(QColor(theme_color("ACCENT_DEEP") if current else theme_color("FAINT")))
             number.setFont(_weighted(number.font(), current))
 
-        title = self.table.item(row, 1)
-        if title is not None:
-            title.setText(("▸  " if current else "   ") + track.title)
-            title.setForeground(QColor(theme_color("ACCENT_DEEP") if current else theme_color("TEXT")))
-            title.setFont(_weighted(title.font(), current))
+        title = self.table.cellWidget(row, 1)
+        label = title.findChild(MarqueeLabel, "queueTitleText") if title else None
+        if label is not None:
+            prefix = "▸  " if current else "   "
+            label.setText(prefix + track.title)
+            label.set_color(theme_color("ACCENT_DEEP") if current else theme_color("TEXT"))
+            label.setFont(_weighted(label.font(), current))
+            label.refresh()
 
         background = QBrush(QColor(theme_color("TINT"))) if current else QBrush()
         for column in range(self.table.columnCount()):

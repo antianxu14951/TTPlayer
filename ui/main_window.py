@@ -73,6 +73,7 @@ from ui.icons import (
     transport_pixmap,
     volume_pixmap,
 )
+from ui.marquee import MarqueeLabel
 from ui.queue_popup import QueuePopup
 from ui.pet_widget import PetWidget
 from ui.texts import ask_confirm, ask_danger, show_info, warning
@@ -491,14 +492,16 @@ class MainWindow(QMainWindow):
         text_layout = QVBoxLayout(text_widget)
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(4)
-        self.track_title_label = QLabel("未播放")
+        self.track_title_label = MarqueeLabel("未播放")
         self.track_title_label.setObjectName("trackTitle")
         self.track_subtitle_label = QLabel("")
         self.track_subtitle_label.setObjectName("trackSubtitle")
-        # The column never grows: long titles elide instead of shoving the
+        # The column never grows: long titles scroll inside the fixed width
+        # (MarqueeLabel) and the subtitle elides, so neither shoves the
         # transport off the middle of the bar.
         for label in (self.track_title_label, self.track_subtitle_label):
             label.setFixedWidth(INFO_TEXT_WIDTH)
+        self.track_title_label.setFixedHeight(22)
         text_layout.addStretch(1)
         text_layout.addWidget(self.track_title_label)
         text_layout.addWidget(self.track_subtitle_label)
@@ -1578,18 +1581,23 @@ class MainWindow(QMainWindow):
         self.cover_label.setPixmap(rounded_pixmap(source, COVER_SIZE, 10))
 
     def _set_transport_text(self, title: str, subtitle: str) -> None:
-        """Two lines, one column: elide so neither can push the bar around."""
-        for label, text in (
-            (self.track_title_label, title),
-            (self.track_subtitle_label, subtitle),
-        ):
-            metrics = QFontMetrics(label.font())
-            label.setText(
-                metrics.elidedText(
-                    text, Qt.TextElideMode.ElideRight, INFO_TEXT_WIDTH - 2
-                )
+        """Two lines, one column: elide so neither can push the bar around.
+
+        The title is a MarqueeLabel: it keeps the full text and scrolls it
+        when the column is too narrow, so a long song name stays readable
+        instead of collapsing into "某某某…". The subtitle still elides —
+        the artist/album line is reference information, not the thing you
+        are looking for.
+        """
+        self.track_title_label.setText(title)
+        self.track_title_label.setToolTip(title)
+        metrics = QFontMetrics(self.track_subtitle_label.font())
+        self.track_subtitle_label.setText(
+            metrics.elidedText(
+                subtitle, Qt.TextElideMode.ElideRight, INFO_TEXT_WIDTH - 2
             )
-            label.setToolTip(text)
+        )
+        self.track_subtitle_label.setToolTip(subtitle)
 
     def _on_track_changed(self, track: Track | None) -> None:
         if track is None:
