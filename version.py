@@ -18,7 +18,7 @@ import re
 # Current version — semantic versioning (major.minor.patch)
 # ---------------------------------------------------------------------------
 MAJOR = 1
-MINOR = 1
+MINOR = 2
 PATCH = 0
 
 # Codename, echoing the default "暖白晨光" theme so build and UI share a voice.
@@ -69,6 +69,18 @@ RELEASES: tuple[dict[str, object], ...] = (
         "version": VERSION,
         "codename": CODENAME,
         "date": RELEASE_DATE,
+        "notes": (
+            "桌面宠物挂件：设置里可开启，桌面右下角养一只小猫，听歌时它也跟着玩、睡、伸懒腰",
+            "宠物互动：单击摸头，拖动挪位置，右键投喂；睡着时被硬叫醒会弓背生气",
+            "宠物养成：按听歌时长攒猫粮，饿了会提醒，记得回来喂它",
+            "长歌名跑马灯：播放器与正在播放歌单里，歌名超出宽度时自动循环滚动，不再被省略号截断",
+            "正在播放歌单加宽：标题列从 76px 提到 138px，歌手与专辑不再抢走歌名的位置",
+        ),
+    },
+    {
+        "version": "1.1.0",
+        "codename": CODENAME,
+        "date": "2026-11-28",
         "notes": (
             "曲目溯源：聚合搜索导入记录音频原始下载链接，抖音导入记录分享视频链接，"
             "文件丢失后可凭来源重新获取",
